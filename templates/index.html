@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+
+</head>
+<body>
+{#audio是HTML5的标签,autoplay表示自动播放,controls表示展示组件#}
+<audio src="" autoplay controls id="player"></audio>
+<br>
+<button onclick="start_reco()">开始废话</button>
+<br>
+<button onclick="stop_reco()">发送语音</button>
+</body>
+<script src="/static/recorder.js"></script>
+<script type="application/javascript">
+    // 访问后端的get_file,得到一个文件名
+    var get_file = "http://127.0.0.1:5300/get_file/";
+    // 创建WebSocket对象,index后面的是userid,是图灵机器人需要的
+    var ws = new WebSocket("ws://127.0.0.1:5300/index/taylor");
+    var reco = null;  //录音对象
+    // 创建AudioContext对象
+    // AudioContext() 构造方法创建了一个新的 AudioContext 对象 它代表了一个由音频模块链接而成的音频处理图, 每一个模块由 AudioNode 表示
+    var audio_context = new AudioContext();
+    //要获取音频和视频，需要用到getUserMedia。桌面平台支持的浏览器包括Chrome, Firefox, Opera和Edge。
+    // 这里的|| 表示或者的关系，也就是能支持的浏览器
+    navigator.getUserMedia = (navigator.getUserMedia ||
+        navigator.webkitGetUserMedia ||
+        navigator.mozGetUserMedia ||
+        navigator.msGetUserMedia);
+
+    // 拿到媒体对象，允许音频对象
+    navigator.getUserMedia({audio: true}, create_stream, function (err) {
+        console.log(err)
+    });
+
+    //创建媒体流容器
+    function create_stream(user_media) {
+        //AudioContext接口的createMediaStreamSource()方法用于创建一个新的MediaStreamAudioSourceNode 对象,
+        // 需要传入一个媒体流对象(MediaStream对象)(可以从 navigator.getUserMedia 获得MediaStream对象实例),
+        // 然后来自MediaStream的音频就可以被播放和操作。
+        // MediaStreamAudioSourceNode 接口代表一个音频接口，是WebRTC MediaStream (比如一个摄像头或者麦克风)的一部分。
+        // 是个表现为音频源的AudioNode。
+        var stream_input = audio_context.createMediaStreamSource(user_media);
+        // 给Recoder 创建一个空间，麦克风说的话，都可以录入。是一个流
+        reco = new Recorder(stream_input);
+    }
+
+    function start_reco() {  //开始录音
+        reco.record(); //往里面写流
+    }
+
+    function stop_reco() {  //停止录音
+        reco.stop();  //停止写入流
+        get_audio();  //调用自定义方法
+        reco.clear(); //清空容器
+    }
+
+    // 获取音频
+    function get_audio() {
+        reco.exportWAV(function (wav_file) {
+            // 发送数据给后端
+            ws.send(wav_file);
+        })
+    }
+
+    // 接收到服务端数据时触发
+    ws.onmessage = function (data) {
+        // console.log(data.data);
+        console.log(get_file + data.data);  //打印文件名
+        // 修改id为player的src属性,
+        document.getElementById("player").src = get_file + data.data;
+    }
+
+</script>
+</html>
